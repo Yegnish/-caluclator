@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Persistent Calculator with History</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 650px;
+      margin: auto;
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    input, button, select {
+      padding: 10px;
+      margin: 8px 0;
+      width: 85%;
+      font-size: 16px;
+    }
+    #total {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 15px;
+      color: #333;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+    th {
+      background-color: #eee;
+    }
+    h3 {
+      margin-top: 30px;
+    }
+    .pagination {
+      margin-top: 20px;
+    }
+    .pagination button {
+      padding: 5px 10px;
+      margin: 0 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Persistent Calculator</h2>
+
+  <p id="total">Current Total: 0</p>
+
+  <input type="number" id="inputNumber" placeholder="Enter a number">
+  <button onclick="addToTotal()">Add</button>
+  <button onclick="subtractFromTotal()">Subtract</button>
+  <button onclick="updateTotal()">Update Total</button>
+  <button onclick="clearHistory()">Clear History</button>
+
+  <h3>Update Specific Row</h3>
+  <input type="number" id="rowIndex" placeholder="Row number (1 = most recent)">
+  <select id="newAction">
+    <option value="Add">Add</option>
+    <option value="Subtract">Subtract</option>
+    <option value="Update">Update</option>
+  </select>
+  <input type="number" id="newValue" placeholder="New value">
+  <input type="number" id="newTotal" placeholder="New total">
+  <button onclick="updateRow()">Update Row</button>
+
+  <h3>Delete Specific Row</h3>
+  <input type="number" id="deleteRowIndex" placeholder="Row number (1 = most recent)">
+  <button onclick="deleteRow()">Delete Row</button>
+
+  <h3>Restore Most Recently Deleted Row</h3>
+  <button onclick="restoreRow()">Restore Row</button>
+
+  <h3>Add N 1's to Total</h3>
+  <input type="number" id="nOnes" placeholder="Enter how many 1's to add" min="1">
+  <button onclick="addNOnes()">Add N 1's</button>
+
+  <h3>Search History</h3>
+  <input type="text" id="searchInput" placeholder="Search by action or value" oninput="filterHistory()">
+
+  <h3>History</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Action</th>
+        <th>Value</th>
+        <th>New Total</th>
+      </tr>
+    </thead>
+    <tbody id="historyTable"></tbody>
+  </table>
+
+  <div class="pagination">
+    <button id="prevPage" onclick="changePage(-1)">Previous</button>
+    <button id="nextPage" onclick="changePage(1)">Next</button>
+    <span id="pageInfo">Page 1 of 1</span>
+  </div>
+</div>
+
+<script>
+  let total = 0;
+  let history = [];
+  let deletedRows = [];
+  let currentPage = 1;
+  const rowsPerPage = 200;
+  const maxHistorySize = 10000;
+
+  window.onload = function () {
+    total = parseFloat(localStorage.getItem('total')) || 0;
+    history = JSON.parse(localStorage.getItem('history')) || [];
+    deletedRows = JSON.parse(localStorage.getItem('deletedRows')) || [];
+
+    updateDisplay();
+    renderHistory();
+  };
+
+  function updateDisplay() {
+    document.getElementById('total').textContent = "Current Total: " + total;
+    localStorage.setItem('total', total);
+  }
+
+  function getInputValue() {
+    const value = parseFloat(document.getElementById('inputNumber').value);
+    return isNaN(value) ? 0 : value;
+  }
+
+  function logHistory(action, value, newTotal) {
+    history.unshift({ action, value, newTotal });
+    localStorage.setItem('history', JSON.stringify(history));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const table = document.getElementById('historyTable');
+    table.innerHTML = "";
+
+    const totalPages = Math.ceil(history.length / rowsPerPage);
+    if (currentPage > totalPages) currentPage = totalPages || 1;
+
+    const startIdx = (currentPage - 1) * rowsPerPage;
+    const endIdx = currentPage * rowsPerPage;
+    const pageItems = history.slice(startIdx, endIdx);
+
+    pageItems.forEach(item => {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${item.action}</td><td>${item.value}</td><td>${item.newTotal}</td>`;
+      table.appendChild(row);
+    });
+
+    document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+    document.getElementById('prevPage').disabled = currentPage === 1;
+    document.getElementById('nextPage').disabled = currentPage === totalPages || totalPages === 0;
+  }
+
+  function filterHistory() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    history = JSON.parse(localStorage.getItem('history')) || [];
+    if (search.trim()) {
+      history = history.filter(item =>
+        item.action.toLowerCase().includes(search) ||
+        item.value.toString().includes(search) ||
+        item.newTotal.toString().includes(search)
+      );
+    }
+    currentPage = 1;
+    renderHistory();
+  }
+
+  function changePage(dir) {
+    const totalPages = Math.ceil(history.length / rowsPerPage);
+    const newPage = currentPage + dir;
+    if (newPage >= 1 && newPage <= totalPages) {
+      currentPage = newPage;
+      renderHistory();
+    }
+  }
+
+  function addToTotal() {
+    const num = getInputValue();
+    total += num;
+    updateDisplay();
+    logHistory("Add", num, total);
+  }
+
+  function subtractFromTotal() {
+    const num = getInputValue();
+    total -= num;
+    updateDisplay();
+    logHistory("Subtract", num, total);
+  }
+
+  function updateTotal() {
+    const num = getInputValue();
+    total = num;
+    updateDisplay();
+    logHistory("Update", num, total);
+  }
+
+  function updateRow() {
+    const idx = parseInt(document.getElementById('rowIndex').value) - 1;
+    const act = document.getElementById('newAction').value;
+    const val = parseFloat(document.getElementById('newValue').value);
+    const nt = parseFloat(document.getElementById('newTotal').value);
+    if (isNaN(idx) || isNaN(val) || isNaN(nt) || idx < 0 || idx >= history.length) {
+      alert("Invalid inputs");
+      return;
+    }
+    history[idx] = { action: act, value: val, newTotal: nt };
+    if (idx === 0) total = nt;
+    localStorage.setItem('history', JSON.stringify(history));
+    localStorage.setItem('total', total);
+    updateDisplay();
+    renderHistory();
+  }
+
+  function deleteRow() {
+    const idx = parseInt(document.getElementById('deleteRowIndex').value) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= history.length) {
+      alert("Invalid row number.");
+      return;
+    }
+    deletedRows.unshift(history.splice(idx, 1)[0]);
+    localStorage.setItem('deletedRows', JSON.stringify(deletedRows));
+    recalculateTotal();
+  }
+
+  function restoreRow() {
+    if (!deletedRows.length) {
+      alert("No deleted rows to restore.");
+      return;
+    }
+    history.unshift(deletedRows.shift());
+    recalculateTotal();
+  }
+
+  function recalculateTotal() {
+    let currTotal = 0;
+    history = history.reverse().map(item => {
+      if (item.action === "Add") currTotal += item.value;
+      else if (item.action === "Subtract") currTotal -= item.value;
+      else if (item.action === "Update") currTotal = item.value;
+      return { ...item, newTotal: currTotal };
+    }).reverse();
+    total = history[0]?.newTotal || 0;
+    updateDisplay();
+    renderHistory();
+    localStorage.setItem('history', JSON.stringify(history));
+    localStorage.setItem('total', total);
+  }
+
+  function addNOnes() {
+    const n = parseInt(document.getElementById('nOnes').value);
+    if (isNaN(n) || n <= 0) {
+      alert("Enter a valid number.");
+      return;
+    }
+  
+    // Generate in chunks to avoid blocking UI
+    const batchSize = 1000;
+    let i = 0;
+  
+    function addBatch() {
+      const end = Math.min(i + batchSize, n);
+      for (; i < end; i++) {
+        total += 1;
+        history.unshift({ action: "Add 1", value: 1, newTotal: total });
+      }
+  
+      if (history.length > maxHistorySize) {
+        history = history.slice(0, maxHistorySize);
+      }
+  
+      if (i < n) {
+        setTimeout(addBatch, 0); // Schedule next chunk
+      } else {
+        localStorage.setItem('history', JSON.stringify(history));
+        localStorage.setItem('total', total);
+        updateDisplay();
+        renderHistory();
+      }
+    }
+  
+    addBatch();
+  }
+  function clearHistory() {
+    if (confirm("Are you sure you want to clear the entire history?")) {
+      history = [];
+      total = 0;
+      localStorage.removeItem('history');
+      localStorage.setItem('total', total);
+      updateDisplay();
+      renderHistory();
+    }
+  }
+  
+</script>
+
+</body>
+</html>
